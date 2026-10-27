@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NBA傷兵">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0d12">
+<link rel="apple-touch-icon" id="icon" href="">
+<title>NBA 傷兵</title>
+<style>
+:root{--bg:#0b0d12;--card:#151922;--line:#232938;--tx:#eef1f6;--mut:#8b93a7;
+--out:#ff5b5b;--dbt:#ff9f43;--q:#f7c948;--dtd:#7f8aa3;--ok:#4cd68a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"PingFang TC",system-ui,sans-serif}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:rgba(11,13,18,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:8px}
+h1{font-size:20px;margin:0;flex:1}
+button{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:7px 11px;font-size:14px}
+button:active{opacity:.6}
+#sub{font-size:12px;color:var(--mut);margin-top:4px}
+#q{width:100%;margin-top:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--tx);font-size:16px;outline:none}
+main{padding:10px 12px 40px}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden}
+summary{list-style:none;padding:13px 14px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:16px}
+summary::-webkit-details-marker{display:none}
+summary .en{font-weight:400;color:var(--mut);font-size:12px}
+summary .n{margin-left:auto;background:#222a3b;border-radius:99px;padding:2px 10px;font-size:13px;color:var(--mut)}
+summary::after{content:"›";color:var(--mut);transition:transform .15s}
+details[open] summary::after{transform:rotate(90deg)}
+.p{padding:10px 14px;border-top:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:8px}
+.nm{flex:1;font-size:15px}
+.pos{color:var(--mut);font-size:12px;margin-left:4px}
+.chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;color:#111;white-space:nowrap}
+.ret{margin-top:4px;font-size:13px;color:var(--mut)}
+.ret b{color:var(--tx);font-weight:600}
+.cm{display:none;margin-top:6px;font-size:12.5px;line-height:1.45;color:var(--mut)}
+.p.open .cm{display:block}
+.none{padding:12px 14px;color:var(--ok);font-size:14px;border-top:1px solid var(--line)}
+#msg{text-align:center;color:var(--mut);padding:40px 20px;font-size:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <div class="row"><h1>🏀 NBA 傷兵名單</h1><button id="tg">收合</button><button id="rf">重新整理</button></div>
+  <div id="sub">載入中…</div>
+  <input id="q" type="search" placeholder="搜尋球隊或球員" autocomplete="off">
+</header>
+<main><div id="msg">載入中…</div><div id="list"></div></main>
+
+<script>
+const API='https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries';
+const ZH={"Atlanta Hawks":"老鷹","Boston Celtics":"塞爾蒂克","Brooklyn Nets":"籃網","Charlotte Hornets":"黃蜂","Chicago Bulls":"公牛","Cleveland Cavaliers":"騎士","Dallas Mavericks":"獨行俠","Denver Nuggets":"金塊","Detroit Pistons":"活塞","Golden State Warriors":"勇士","Houston Rockets":"火箭","Indiana Pacers":"溜馬","LA Clippers":"快艇","Los Angeles Clippers":"快艇","Los Angeles Lakers":"湖人","Memphis Grizzlies":"灰熊","Miami Heat":"熱火","Milwaukee Bucks":"公鹿","Minnesota Timberwolves":"灰狼","New Orleans Pelicans":"鵜鶘","New York Knicks":"尼克","Oklahoma City Thunder":"雷霆","Orlando Magic":"魔術","Philadelphia 76ers":"76人","Phoenix Suns":"太陽","Portland Trail Blazers":"拓荒者","Sacramento Kings":"國王","San Antonio Spurs":"馬刺","Toronto Raptors":"暴龍","Utah Jazz":"爵士","Washington Wizards":"巫師"};
+const ST={"out":["缺陣","var(--out)"],"doubtful":["不太可能出賽","var(--dbt)"],"questionable":["出賽成疑","var(--q)"],"day-to-day":["每日觀察","var(--dtd)"],"probable":["可能出賽","var(--ok)"]};
+const $=s=>document.querySelector(s);
+let DATA=null, allOpen=true;
+
+function stInfo(s){const k=(s||'').toLowerCase();for(const key in ST){if(k.includes(key))return ST[key]}return[s||'未知',"var(--dtd)"]}
+function days(d){const t=new Date(d);if(isNaN(t))return null;const a=new Date();a.setHours(0,0,0,0);t.setHours(0,0,0,0);return Math.round((t-a)/864e5)}
+function retText(it){
+  const rd=it.details&&it.details.returnDate;
+  if(rd){const n=days(rd);if(n!==null){const d=new Date(rd);const ds=(d.getMonth()+1)+'/'+d.getDate();
+    if(n<0)return`預計回歸：<b>${ds}</b>（已過期，待更新）`;
+    if(n===0)return`預計回歸：<b>今天 ${ds}</b>`;
+    return`預計回歸：<b>${ds}</b>（${n} 天後）`}}
+  return'預計回歸：<b>未定</b>';
+}
+function sortKey(it){const rd=it.details&&it.details.returnDate;const t=rd?new Date(rd).getTime():NaN;return isNaN(t)?9e15:t}
+function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function render(){
+  if(!DATA)return;
+  const q=$('#q').value.trim().toLowerCase();
+  const teams=(DATA.injuries||[]).map(t=>({name:t.displayName||'',list:(t.injuries||[]).slice().sort((a,b)=>sortKey(a)-sortKey(b))}))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  let html='',shown=0;
+  for(const t of teams){
+    const zh=ZH[t.name]||t.name;
+    const teamHit=!q||t.name.toLowerCase().includes(q)||zh.includes(q);
+    const list=teamHit?t.list:t.list.filter(i=>((i.athlete&&i.athlete.displayName)||'').toLowerCase().includes(q));
+    if(!teamHit&&!list.length)continue;
+    shown++;
+    html+=`<details ${allOpen||q?'open':''}><summary>${esc(zh)} <span class="en">${esc(t.name)}</span><span class="n">${list.length}</span></summary>`;
+    if(!list.length)html+='<div class="none">✓ 目前無傷兵</div>';
+    for(const i of list){
+      const a=i.athlete||{};const [lab,col]=stInfo(i.status);
+      const pos=(a.position&&a.position.abbreviation)||'';
+      const cm=i.shortComment||i.longComment||'';
+      html+=`<div class="p"><div class="top"><div class="nm">${esc(a.displayName)}<span class="pos">${esc(pos)}</span></div><span class="chip" style="background:${col}">${lab}</span></div><div class="ret">${retText(i)}</div>${cm?`<div class="cm">${esc(cm)}</div>`:''}</div>`;
+    }
+    html+='</details>';
+  }
+  $('#list').innerHTML=html;
+  $('#msg').style.display=shown?'none':'block';
+  if(!shown)$('#msg').textContent=q?'找不到符合的結果':'目前沒有傷兵資料';
+}
+
+async function load(){
+  $('#sub').textContent='更新中…';
+  try{
+    const r=await fetch(API+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    DATA=await r.json();
+    try{localStorage.setItem('nba_inj',JSON.stringify({t:Date.now(),d:DATA}))}catch(e){}
+    $('#sub').textContent='更新於 '+new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})+'・資料來源 ESPN';
+    render();
+  }catch(e){
+    let c=null;try{c=JSON.parse(localStorage.getItem('nba_inj'))}catch(_){}
+    if(c){DATA=c.d;$('#sub').textContent='⚠️ 連線失敗，顯示 '+new Date(c.t).toLocaleString('zh-TW')+' 的舊資料';render()}
+    else{$('#sub').textContent='⚠️ 載入失敗';$('#msg').style.display='block';$('#msg').textContent='無法取得資料（'+e.message+'）。請檢查網路後按「重新整理」。'}
+  }
+}
+
+$('#rf').onclick=load;
+$('#q').oninput=render;
+$('#tg').onclick=()=>{allOpen=!allOpen;$('#tg').textContent=allOpen?'收合':'展開';document.querySelectorAll('details').forEach(d=>d.open=allOpen)};
+$('#list').addEventListener('click',e=>{const p=e.target.closest('.p');if(p)p.classList.toggle('open')});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
+setInterval(load,5*60*1000);
+
+// home-screen icon
+try{const c=document.createElement('canvas');c.width=c.height=180;const x=c.getContext('2d');
+x.fillStyle='#0b0d12';x.fillRect(0,0,180,180);x.font='110px serif';x.textAlign='center';x.textBaseline='middle';x.fillText('🏀',90,98);
+$('#icon').href=c.toDataURL('image/png')}catch(e){}
+
+load();
+</script>
+</body>
+</html>
